@@ -94,6 +94,106 @@ index e7d4f9b..04d23f5 100644
      bool wideLines{false};
      bool geometryShader{false};
    } features;
+diff --git a/src/common/cuda_helper.h b/src/common/cuda_helper.h
+index 738d7c3..0c79a4b 100644
+--- a/src/common/cuda_helper.h
++++ b/src/common/cuda_helper.h
+@@ -1,20 +1,8 @@
+-#ifdef SVULKAN2_CUDA_INTEROP
+ #pragma once
+ 
+ #include "svulkan2/common/vk.h"
+-#include <cuda_runtime.h>
+-#include <map>
+ #include <string>
+ 
+-#define checkCudaErrors(call)                                                                     \
+-  do {                                                                                            \
+-    cudaError_t err = call;                                                                       \
+-    if (err != cudaSuccess) {                                                                     \
+-      fprintf(stderr, "CUDA error at %s %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err));  \
+-      exit(EXIT_FAILURE);                                                                         \
+-    }                                                                                             \
+-  } while (0)
+-
+ inline std::array<uint32_t, 4> parsePCIString(std::string s) {
+   if (s.length() == 12) {
+     return {static_cast<uint32_t>(std::stoi(s.substr(0, 4), 0, 16)),
+@@ -30,6 +18,26 @@ inline std::array<uint32_t, 4> parsePCIString(std::string s) {
+   throw std::runtime_error("invalid PCI string");
+ }
+ 
++inline std::string PCIToString(std::array<uint32_t, 4> pci) {
++  std::string pciBus(20, '\0');
++  sprintf(pciBus.data(), "%04x:%02x:%02x.%1x", pci[0], pci[1], pci[2], pci[3]);
++  return std::string(pciBus.c_str());
++}
++
++#ifdef SVULKAN2_CUDA_INTEROP
++
++#include <cuda_runtime.h>
++#include <map>
++
++#define checkCudaErrors(call)                                                                    \
++  do {                                                                                           \
++    cudaError_t err = call;                                                                      \
++    if (err != cudaSuccess) {                                                                    \
++      fprintf(stderr, "CUDA error at %s %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
++      exit(EXIT_FAILURE);                                                                        \
++    }                                                                                            \
++  } while (0)
++
+ inline std::array<uint32_t, 4> getPCIFromCudaDeviceId(int cudaDeviceId) {
+   std::string pciBus(20, '\0');
+   if (cudaDeviceGetPCIBusId(pciBus.data(), 20, cudaDeviceId) != cudaSuccess) {
+@@ -38,12 +46,6 @@ inline std::array<uint32_t, 4> getPCIFromCudaDeviceId(int cudaDeviceId) {
+   return parsePCIString(std::string(pciBus.c_str()));
+ }
+ 
+-inline std::string PCIToString(std::array<uint32_t, 4> pci) {
+-  std::string pciBus(20, '\0');
+-  sprintf(pciBus.data(), "%04x:%02x:%02x.%1x", pci[0], pci[1], pci[2], pci[3]);
+-  return std::string(pciBus.c_str());
+-}
+-
+ inline int getCudaDeviceIdFromPhysicalDevice(const vk::PhysicalDevice &device) {
+ 
+   auto props = device.getProperties2<vk::PhysicalDeviceProperties2,
+@@ -61,8 +63,9 @@ inline int getCudaDeviceIdFromPhysicalDevice(const vk::PhysicalDevice &device) {
+   }
+ 
+   for (int cudaDeviceId = 0; cudaDeviceId < count; cudaDeviceId++) {
+-    if (pci == getPCIFromCudaDeviceId(cudaDeviceId))
++    if (pci == getPCIFromCudaDeviceId(cudaDeviceId)) {
+       return cudaDeviceId;
++    }
+   }
+ 
+   return -1;
+diff --git a/src/common/profiler.cpp b/src/common/profiler.cpp
+index d4bc511..a4acb1c 100644
+--- a/src/common/profiler.cpp
++++ b/src/common/profiler.cpp
+@@ -1,10 +1,19 @@
+ #include "svulkan2/common/profiler.h"
++
++#if defined(SVULKAN2_PROFILE) && !defined(NVTX_DISABLE)
+ #include <nvtx3/nvToolsExt.h>
++#endif
+ 
+ namespace svulkan2 {
+ 
++#if defined(SVULKAN2_PROFILE) && !defined(NVTX_DISABLE)
+ void ProfilerEvent(char const *name) { nvtxMarkA(name); }
+ void ProfilerBlockBegin(char const *name) { nvtxRangePushA(name); }
+ void ProfilerBlockEnd() { nvtxRangePop(); }
++#else
++void ProfilerEvent(char const *name) {}
++void ProfilerBlockBegin(char const *name) {}
++void ProfilerBlockEnd() {}
++#endif
+ 
+ } // namespace sapien
 diff --git a/src/core/device.cpp b/src/core/device.cpp
 index 0e64d42..ecaf5e1 100644
 --- a/src/core/device.cpp
