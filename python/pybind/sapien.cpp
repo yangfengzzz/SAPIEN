@@ -253,6 +253,7 @@ Generator<int> init_sapien(py::module &m) {
       .def_property_readonly("pci_string", &Device::getPciString);
 
   PyCudaArray
+#ifdef SAPIEN_CUDA
       .def(py::init<>([](py::object obj) {
              auto interface = obj.attr("__cuda_array_interface__").cast<py::dict>();
 
@@ -275,9 +276,16 @@ Generator<int> init_sapien(py::module &m) {
                                     .strides = strides,
                                     .type = type,
                                     .cudaId = getCudaPtrDevice(ptr),
-                                    .ptr = ptr};
+                                     .ptr = ptr};
            }),
            py::arg("data"))
+#else
+      .def(py::init([](py::object) -> CudaArrayHandle {
+             throw std::runtime_error(
+                 "CudaArray is unavailable in CPU-only builds because CUDA support is disabled.");
+           }),
+           py::arg("data"))
+#endif
       .def_readonly("shape", &CudaArrayHandle::shape)
       .def_readonly("strides", &CudaArrayHandle::strides)
       .def_readonly("cuda_id", &CudaArrayHandle::cudaId)

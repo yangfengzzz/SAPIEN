@@ -1,4 +1,4 @@
-from ..pysapien.physx import PhysxSystem, PhysxGpuSystem, PhysxCpuSystem, PhysxMaterial
+from ..pysapien.physx import PhysxSystem, PhysxCpuSystem, PhysxMaterial
 from .. import pysapien as sapien
 from ..pysapien.render import RenderSystem
 from warnings import warn

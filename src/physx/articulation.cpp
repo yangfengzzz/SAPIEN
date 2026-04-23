@@ -225,7 +225,7 @@ Eigen::VectorXf PhysxArticulation::getQpos() {
   uint32_t dof = getDof();
 
   if (getRoot()->isUsingDirectGPUAPI()) {
-
+#ifdef SAPIEN_CUDA
     static bool once = []() {
       logger::warn("fetching articulation qpos from GPU is very slow and should be avoided");
       return true;
@@ -235,6 +235,9 @@ Eigen::VectorXf PhysxArticulation::getQpos() {
     auto qpos = std::dynamic_pointer_cast<PhysxSystemGpu>(mScene->getPhysxSystem())
                     ->gpuDownloadArticulationQpos(mPxArticulation->getGpuArticulationIndex());
     return Eigen::Map<Eigen::VectorXf>(qpos.data(), dof);
+#else
+    throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
   }
 
   mPxArticulation->copyInternalStateToCache(*mCache, PxArticulationCacheFlag::ePOSITION);
@@ -269,7 +272,7 @@ void PhysxArticulation::setQpos(Eigen::VectorXf const &q) {
   checkDof(q.size());
   uint32_t dof = getDof();
   if (getRoot()->isUsingDirectGPUAPI()) {
-
+#ifdef SAPIEN_CUDA
     static bool once = []() {
       logger::warn("setting articulation qpos to GPU is very slow and should be avoided");
       return true;
@@ -279,6 +282,9 @@ void PhysxArticulation::setQpos(Eigen::VectorXf const &q) {
     std::dynamic_pointer_cast<PhysxSystemGpu>(mScene->getPhysxSystem())
         ->gpuUploadArticulationQpos(mPxArticulation->getGpuArticulationIndex(), q);
     return;
+#else
+    throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
   }
   Eigen::Map<Eigen::VectorXf>(mCache->jointPosition, dof) = q;
   mPxArticulation->applyCache(*mCache, PxArticulationCacheFlag::ePOSITION);

@@ -1,12 +1,16 @@
 #include "sapien/sapien_renderer/batched_render_system.h"
+#ifdef SAPIEN_CUDA
 #include "./batched_render_system.cuh"
+#endif
 #include "sapien/sapien_renderer/camera_component.h"
 #include "sapien/sapien_renderer/render_body_component.h"
 #include <svulkan2/renderer/renderer.h>
 #include <svulkan2/renderer/renderer_base.h>
 
+#ifdef SAPIEN_CUDA
 #include "sapien/utils/cuda.h"
 #include <cuda_runtime.h>
+#endif
 
 namespace sapien {
 namespace sapien_renderer {
@@ -14,6 +18,9 @@ namespace sapien_renderer {
 BatchedCamera::BatchedCamera(std::vector<std::shared_ptr<SapienRenderCameraComponent>> cameras,
                              std::vector<std::string> renderTargets)
     : mCameras(cameras) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   if (cameras.empty()) {
     throw std::runtime_error("failed to create BatchedCamera: empty cameras");
   }
@@ -100,9 +107,13 @@ BatchedCamera::BatchedCamera(std::vector<std::shared_ptr<SapienRenderCameraCompo
   desc.type = cudaExternalSemaphoreHandleTypeTimelineSemaphoreFd;
   checkCudaErrors(cudaImportExternalSemaphore(&mCudaSem, &desc));
   // TODO clean up cudaSem
+#endif
 }
 
 void BatchedCamera::takePicture() {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   auto context = SapienRenderEngine::Get()->getContext();
 
   // make sure previous takePicture has finished
@@ -122,19 +133,26 @@ void BatchedCamera::takePicture() {
   cudaExternalSemaphoreWaitParams waitParams{};
   waitParams.params.fence.value = mFrameCounter;
   cudaWaitExternalSemaphoresAsync(&mCudaSem, &waitParams, 1, mCudaStream);
+#endif
 }
 
 CudaArrayHandle BatchedCamera::getPictureCuda(std::string const &name) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   if (!mCudaImageHandles.contains(name)) {
     throw std::runtime_error("Failed to get image with name :" + name +
                              ". Did you forget to specify it in create_camera_group?");
   }
   return mCudaImageHandles.at(name);
+#endif
 }
 
 BatchedCamera::~BatchedCamera() {
+#ifdef SAPIEN_CUDA
   SapienRenderEngine::Get()->getContext()->getDevice().waitIdle();
   cudaDestroyExternalSemaphore(mCudaSem);
+#endif
 }
 
 BatchedRenderSystem::BatchedRenderSystem(
@@ -147,6 +165,9 @@ BatchedRenderSystem::BatchedRenderSystem(
 }
 
 void BatchedRenderSystem::init() {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   std::vector<RenderShapeData> allShapeData;
   std::vector<void *> sceneTransformRefs;
 
@@ -225,6 +246,7 @@ void BatchedRenderSystem::init() {
     desc.type = cudaExternalSemaphoreHandleTypeTimelineSemaphoreFd;
     checkCudaErrors(cudaImportExternalSemaphore(&mCudaSem, &desc));
   }
+#endif
 }
 
 void BatchedRenderSystem::setPoseSource(CudaArrayHandle const &poses) {
@@ -238,6 +260,9 @@ void BatchedRenderSystem::setPoseSource(CudaArrayHandle const &poses) {
 std::shared_ptr<BatchedCamera> BatchedRenderSystem::createCameraBatch(
     std::vector<std::shared_ptr<SapienRenderCameraComponent>> cameras,
     std::vector<std::string> renderTargets) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   auto cameraBatch = std::make_shared<BatchedCamera>(cameras, renderTargets);
   cameraBatch->setCudaStream(mCudaStream);
 
@@ -267,9 +292,13 @@ std::shared_ptr<BatchedCamera> BatchedRenderSystem::createCameraBatch(
   checkCudaErrors(cudaSetDevice(SapienRenderEngine::Get()->getDevice()->cudaId));
   mCudaCameraDataBuffer = CudaArray::FromData(allCamData);
   return cameraBatch;
+#endif
 }
 
 void BatchedRenderSystem::update() {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   // check pose handle
   if (!mCudaPoseHandle.ptr) {
     throw std::runtime_error("the data source for pose has not been set.");
@@ -305,9 +334,11 @@ void BatchedRenderSystem::update() {
 
   // sync with renderer
   notifyUpdate();
+#endif
 }
 
 void BatchedRenderSystem::notifyUpdate() {
+#ifdef SAPIEN_CUDA
   cudaExternalSemaphoreSignalParams sigParams{};
   sigParams.flags = 0;
   sigParams.params.fence.value = ++mSemValue;
@@ -316,18 +347,25 @@ void BatchedRenderSystem::notifyUpdate() {
   vk::PipelineStageFlags stage = vk::PipelineStageFlagBits::eAllCommands;
   SapienRenderEngine::Get()->getContext()->getQueue().submit({}, mSem.get(), stage, mSemValue, {},
                                                              {}, {});
+#endif
 }
 
 void BatchedRenderSystem::setCudaStream(uintptr_t stream) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   mCudaStream = (cudaStream_t)stream;
   for (auto &c : mCameraBatches) {
     c->setCudaStream(mCudaStream);
   }
+#endif
 }
 
 BatchedRenderSystem ::~BatchedRenderSystem() {
+#ifdef SAPIEN_CUDA
   SapienRenderEngine::Get()->getContext()->getDevice().waitIdle();
   cudaDestroyExternalSemaphore(mCudaSem);
+#endif
 }
 
 } // namespace sapien_renderer

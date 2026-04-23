@@ -12,8 +12,10 @@
 #include <svulkan2/renderer/rt_renderer.h>
 #include <svulkan2/scene/scene.h>
 
+#ifdef SAPIEN_CUDA
 #include "sapien/utils/cuda.h"
 #include <cuda_runtime.h>
+#endif
 
 namespace sapien {
 namespace sapien_renderer {
@@ -169,6 +171,7 @@ void SapienRendererSystem::step() {
 }
 
 CudaArrayHandle SapienRendererSystem::getTransformCudaArray() {
+#ifdef SAPIEN_CUDA
   mScene->prepareObjectTransformBuffer();
   int offset = mScene->getGpuTransformBufferSize();
 
@@ -178,6 +181,9 @@ CudaArrayHandle SapienRendererSystem::getTransformCudaArray() {
                          .type = "f4",
                          .cudaId = buffer->getCudaDeviceId(),
                          .ptr = buffer->getCudaPtr()};
+#else
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
 }
 
 SapienRendererSystem::~SapienRendererSystem() {}

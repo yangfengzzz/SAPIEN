@@ -2,8 +2,10 @@
 #include "../logger.h"
 #include "sapien/physx/physx_default.h"
 
+#ifdef SAPIEN_CUDA
 #include "../utils/cuda_lib.h"
 #include "sapien/utils/cuda.h"
+#endif
 
 using namespace physx;
 
@@ -80,6 +82,9 @@ PhysxEngine::PhysxEngine(float toleranceLength, float toleranceSpeed) {
 }
 
 ::physx::PxCudaContextManager *PhysxEngine::getCudaContextManager(int cudaId) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#else
   if (!PhysxDefault::GetGPUEnabled()) {
     throw std::runtime_error("Using CUDA is not allowed when PhysX GPU is not enabled.");
   }
@@ -117,6 +122,7 @@ PhysxEngine::PhysxEngine(float toleranceLength, float toleranceSpeed) {
   return mCudaContextManagers[cudaId];
 
   // TODO clean up
+#endif
 }
 
 PhysxEngine::~PhysxEngine() {

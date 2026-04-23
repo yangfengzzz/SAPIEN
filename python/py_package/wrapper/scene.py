@@ -4,6 +4,7 @@ from typing import Optional, TypeVar, Union
 from warnings import warn
 
 from .. import pysapien as sapien
+from ..version import __cpu_only__
 from ..pysapien import Scene as _Scene
 from ..pysapien.physx import PhysxSceneConfig as SceneConfig
 from ..pysapien.render import RenderCameraComponent, RenderCubemap
@@ -397,6 +398,11 @@ class Scene(_Scene):
     # TODO particle entity, deformable entity
 
     def create_viewer(self):
+        if __cpu_only__:
+            raise RuntimeError(
+                "The CPU-only SAPIEN build supports simulation and offscreen rendering, "
+                "but not the interactive viewer."
+            )
         from sapien.utils import Viewer
 
         viewer = Viewer()

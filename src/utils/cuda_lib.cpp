@@ -1,4 +1,5 @@
 #include "./cuda_lib.h"
+#ifdef SAPIEN_CUDA
 #include <stdexcept>
 
 #if _WIN64
@@ -48,3 +49,4 @@ CudaLib &CudaLib::Get() {
 }
 
 } // namespace sapien
+#endif

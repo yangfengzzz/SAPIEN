@@ -18,6 +18,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--debug", action="store_true")
 parser.add_argument("--profile", action="store_true")
 parser.add_argument(
+    "--cpu-only",
+    action="store_true",
+    help="build a CPU-only wheel that relies on system Vulkan/Mesa on Linux",
+)
+parser.add_argument(
     "--sapien-only", action="store_true", help="build sapien without python binding"
 )
 parser.add_argument(
@@ -127,7 +132,9 @@ def build_sapien(sapien_source_dir, sapien_build_dir):
     else:
         cmake_args += ["-DSAPIEN_PROFILE=OFF"]
 
-    if os.environ.get("CUDA_PATH") is not None:
+    if args.cpu_only:
+        cmake_args += ["-DSAPIEN_CPU_ONLY=ON", "-DSAPIEN_CUDA=OFF"]
+    elif os.environ.get("CUDA_PATH") is not None:
         cmake_args += ["-DSAPIEN_CUDA=ON"]
     else:
         cmake_args += ["-DSAPIEN_CUDA=OFF"]
@@ -288,8 +295,10 @@ class CMakeBuild(build_ext):
                     if lib in [
                         "libOpenImageDenoise.so.2.0.1",
                         "libOpenImageDenoise_core.so.2.0.1",
-                        "libOpenImageDenoise_device_cuda.so.2.0.1",
-                    ]:
+                    ] or (
+                        not args.cpu_only
+                        and lib == "libOpenImageDenoise_device_cuda.so.2.0.1"
+                    ):
                         shutil.copy(os.path.join(library_dir, lib), oidn_library_path)
 
     def copy_assets(self, ext):
@@ -300,8 +309,8 @@ class CMakeBuild(build_ext):
         assert os.path.exists(source_path)
         shutil.copytree(source_path, vulkan_shader_path)
 
-        # provide Vulkan libraries for linux
-        if platform.system() == "Linux":
+        # provide bundled Vulkan libraries for non-CPU-only linux wheels
+        if platform.system() == "Linux" and not args.cpu_only:
             vulkan_library_path = os.path.join(
                 self.build_lib, "sapien", "vulkan_library"
             )
@@ -322,10 +331,11 @@ class CMakeBuild(build_ext):
             source_patterns_path, os.path.join(sensor_assets_path, "patterns")
         )
         with open(os.path.join(self.build_lib, "sapien", "version.py"), "w") as f:
-            f.write('__version__="{}"'.format(version))
+            f.write('__version__="{}"\n'.format(version))
+            f.write("__cpu_only__={}\n".format("True" if args.cpu_only else "False"))
 
     def build_extension(self, ext):
-        if platform.system() == "Linux":
+        if platform.system() == "Linux" and not args.cpu_only:
             self.build_pinocchio(ext)
         self.build_pybind(ext)
         self.copy_assets(ext)

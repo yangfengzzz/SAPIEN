@@ -13,7 +13,12 @@ from . import pysapien
 from .pysapien import Entity, Component, System, CudaArray, Pose, Device
 from .pysapien import profile
 from .pysapien import set_log_level
-from .pysapien import math, simsense
+from .pysapien import math
+
+try:
+    from .pysapien import simsense
+except ImportError:
+    simsense = None
 
 from . import physx
 from . import render

@@ -278,7 +278,10 @@ try:
 
 except ModuleNotFoundError:
     if platform.system() == "Linux":
-        from ..pysapien_pinocchio import PinocchioModel
+        warnings.warn(
+            "Pinocchio support is unavailable in this build; create_pinocchio_model will not be available"
+        )
+        PinocchioModel = None
     else:
         warnings.warn(
             "pinnochio package is not installed, robotics functionalities will not be available"
@@ -288,9 +291,9 @@ except ModuleNotFoundError:
 except ImportError:
     if platform.system() == "Linux":
         warnings.warn(
-            "pinnochio package is broken, fallback to built-in pinocchio. This may be fixed by installing pinocchio via conda instead of pip"
+            "Pinocchio support is unavailable in this build; create_pinocchio_model will not be available"
         )
-        from ..pysapien_pinocchio import PinocchioModel
+        PinocchioModel = None
     else:
         warnings.warn(
             "pinnochio package is broken, robotics functionalities will not be available"
@@ -301,6 +304,11 @@ except ImportError:
 def _create_pinocchio_model(
     articulation: PhysxArticulation, gravity=[0, 0, -9.81]
 ) -> PinocchioModel:
+    if PinocchioModel is None:
+        raise RuntimeError(
+            "Pinocchio support is not available in this build. "
+            "CPU-only wheels omit the built-in pinocchio extension."
+        )
     xml = export_kinematic_chain_urdf(articulation, force_fix_root=True)
     model = PinocchioModel(xml, gravity)
     model.set_joint_order(

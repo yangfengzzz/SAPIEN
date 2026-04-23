@@ -3,8 +3,9 @@
 #include "sapien/utils/cuda.h"
 #include "sapien/utils/typestr.h"
 #include <dlpack/dlpack.h>
-
+#ifdef SAPIEN_CUDA
 #include <cuda_runtime.h>
+#endif
 
 namespace sapien {
 
@@ -178,6 +179,13 @@ CudaArray &CudaArray::operator=(CudaArray &&other) {
     other.ptr = nullptr;
   }
   return *this;
+#else
+  shape = std::move(other.shape);
+  type = std::move(other.type);
+  cudaId = other.cudaId;
+  ptr = other.ptr;
+  other.ptr = nullptr;
+  return *this;
 #endif
 }
 
@@ -231,6 +239,12 @@ CudaHostArray &CudaHostArray::operator=(CudaHostArray &&other) {
     other.ptr = nullptr;
   }
   return *this;
+#else
+  shape = std::move(other.shape);
+  type = std::move(other.type);
+  ptr = other.ptr;
+  other.ptr = nullptr;
+  return *this;
 #endif
 }
 
@@ -244,7 +258,11 @@ void CudaHostArray::copyFrom(const CudaArray &array) {
   if (!array.ptr) {
     return;
   }
+#ifdef SAPIEN_CUDA
   checkCudaErrors(cudaMemcpy(ptr, array.ptr, array.bytes(), cudaMemcpyDeviceToHost));
+#else
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
 }
 
 CudaArrayHandle CudaArray::handle() const {

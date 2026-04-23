@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
-project(sapien LANGUAGES C CXX CUDA)
+
+option(SAPIEN_CPU_ONLY "Build a CPU-only SAPIEN wheel/runtime" OFF)
+
+project(sapien LANGUAGES C CXX)
 
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
@@ -20,6 +23,9 @@ add_compile_definitions("$<$<CONFIG:DEBUG>:_DEBUG>")
 add_compile_definitions("$<$<CONFIG:DEBUG>:VK_VALIDATION>")
 add_compile_definitions("$<$<CONFIG:DEBUG>:VK_CORE_LOGGING>")
 add_compile_definitions("$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
+if (SAPIEN_CPU_ONLY)
+    add_compile_definitions(SAPIEN_CPU_ONLY)
+endif ()
 
 set(CMAKE_DEBUG_POSTFIX "")
 
@@ -30,6 +36,11 @@ option(SAPIEN_CUDA "Enable SAPIEN CUDA functionalities, including dlpack, CUDA b
 
 option(SAPIEN_BUILD_PYTHON "Build Python binding, only intended to generate compile_commands.json for IDE" OFF)
 option(SAPIEN_BUILD_TEST "build unit tests")
+
+if (SAPIEN_CPU_ONLY)
+    set(SAPIEN_CUDA OFF CACHE BOOL "Enable SAPIEN CUDA functionalities, including dlpack, CUDA buffer, denoiser, and simsense" FORCE)
+    set(SVULKAN2_USE_OPENVR OFF CACHE BOOL "Build OpenVR support in svulkan2" FORCE)
+endif ()
 
 
 set(SAPIEN_PHYSX5_DIR "" CACHE STRING "Directory for precompield PhysX5")
@@ -68,6 +79,7 @@ else ()
 endif ()
 
 if (${SAPIEN_CUDA})
+    enable_language(CUDA)
     set(CUDA_TOOLKIT_ROOT_DIR $ENV{CUDA_PATH})
     set(CMAKE_CUDA_STANDARD 17)
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -O3 -lineinfo -ftemplate-depth=1024")
@@ -90,6 +102,11 @@ endif ()
 
 file(GLOB_RECURSE SAPIEN_SRC "src/*.h" "src/*.cpp" "src/*.cc")
 add_library(sapien SHARED ${SAPIEN_SRC} ${SAPIEN_CUDA_SRC})
+target_compile_definitions(sapien
+    PUBLIC
+        "$<$<BOOL:${SAPIEN_CPU_ONLY}>:SAPIEN_CPU_ONLY>"
+        "$<$<BOOL:${SAPIEN_CUDA}>:SAPIEN_CUDA>"
+)
 if (${SAPIEN_CUDA})
     set_target_properties(sapien PROPERTIES CUDA_ARCHITECTURES "60;61;70;75;80;86")
 
@@ -108,9 +125,9 @@ if (UNIX)
     target_link_libraries(sapien PRIVATE stdc++fs)
 endif ()
 
+target_include_directories(sapien PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/3rd_party/dlpack/include>)
 if (${SAPIEN_CUDA})
     target_compile_definitions(sapien PUBLIC SAPIEN_CUDA SAPIEN_CUDA)
-    target_include_directories(sapien PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/3rd_party/dlpack/include>)
 endif()
 
 target_include_directories(sapien PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

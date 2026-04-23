@@ -2,13 +2,18 @@
 #include "sapien/entity.h"
 #include "sapien/sapien_renderer/material.h"
 #include "sapien/scene.h"
+#ifdef SAPIEN_CUDA
 #include <cuda_runtime.h>
+#endif
 
 namespace sapien {
 namespace sapien_renderer {
 
 CudaDeformableMeshComponent::CudaDeformableMeshComponent(uint32_t maxVertexCount,
                                                          uint32_t maxTriangleCount) {
+#ifndef SAPIEN_CUDA
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
   mEngine = SapienRenderEngine::Get();
   mMesh = std::make_shared<svulkan2::resource::SVMeshDeformable>(maxVertexCount, maxTriangleCount);
 

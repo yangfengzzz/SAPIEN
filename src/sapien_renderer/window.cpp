@@ -54,6 +54,11 @@ void FPSCameraControllerDebug::update() {
 
 SapienRendererWindow::SapienRendererWindow(int width, int height, std::string const &shaderDir)
     : mShaderDir(shaderDir) {
+#ifdef SAPIEN_CPU_ONLY
+  throw std::runtime_error(
+      "The CPU-only SAPIEN build supports offscreen rendering only; interactive viewer windows "
+      "are not available.");
+#endif
   mEngine = SapienRenderEngine::Get();
   auto &renderConfig = SapienRendererDefault::Get();
 

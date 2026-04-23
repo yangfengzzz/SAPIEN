@@ -9,6 +9,21 @@
 
 namespace sapien {
 
+static std::array<uint32_t, 4> parsePCIString(std::string s) {
+  if (s.length() == 12) {
+    return {static_cast<uint32_t>(std::stoi(s.substr(0, 4), 0, 16)),
+            static_cast<uint32_t>(std::stoi(s.substr(5, 2), 0, 16)),
+            static_cast<uint32_t>(std::stoi(s.substr(8, 2), 0, 16)),
+            static_cast<uint32_t>(std::stoi(s.substr(11, 1), 0, 16))};
+  }
+  if (s.length() == 7) {
+    return {0u, static_cast<uint32_t>(std::stoi(s.substr(0, 2), 0, 16)),
+            static_cast<uint32_t>(std::stoi(s.substr(3, 2), 0, 16)),
+            static_cast<uint32_t>(std::stoi(s.substr(6, 1), 0, 16))};
+  }
+  throw std::runtime_error("invalid PCI string");
+}
+
 static std::vector<std::shared_ptr<Device>> vulkanFindDevices() {
   std::shared_ptr<svulkan2::core::Instance> instance;
 
@@ -57,21 +72,6 @@ static std::vector<std::shared_ptr<Device>> vulkanFindDevices() {
 }
 
 #ifdef SAPIEN_CUDA
-
-static std::array<uint32_t, 4> parsePCIString(std::string s) {
-  if (s.length() == 12) {
-    return {static_cast<uint32_t>(std::stoi(s.substr(0, 4), 0, 16)),
-            static_cast<uint32_t>(std::stoi(s.substr(5, 2), 0, 16)),
-            static_cast<uint32_t>(std::stoi(s.substr(8, 2), 0, 16)),
-            static_cast<uint32_t>(std::stoi(s.substr(11, 1), 0, 16))};
-  }
-  if (s.length() == 7) {
-    return {0u, static_cast<uint32_t>(std::stoi(s.substr(0, 2), 0, 16)),
-            static_cast<uint32_t>(std::stoi(s.substr(3, 2), 0, 16)),
-            static_cast<uint32_t>(std::stoi(s.substr(6, 1), 0, 16))};
-  }
-  throw std::runtime_error("invalid PCI string");
-}
 
 static std::vector<std::shared_ptr<Device>> cudaFindDevices() {
   std::vector<std::shared_ptr<Device>> res;

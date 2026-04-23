@@ -1,6 +1,7 @@
 #include "sapien/sapien_renderer/vr.h"
 #include "sapien/sapien_renderer/sapien_renderer_default.h"
 #include "sapien/sapien_renderer/sapien_renderer_system.h"
+#include <svulkan2/renderer/vr.h>
 #include <svulkan2/renderer/rt_renderer.h>
 
 namespace sapien {
@@ -16,6 +17,63 @@ static Pose Mat4ToPose(glm::mat4 const &m) {
   return Pose({pos.x, pos.y, pos.z}, {quat.w, quat.x, quat.y, quat.z});
 }
 
+#ifdef SAPIEN_CPU_ONLY
+SapienVRDisplay::SapienVRDisplay() {
+  throw std::runtime_error(
+      "The CPU-only SAPIEN build does not support VR display integration.");
+}
+
+Pose SapienVRDisplay::getRootPose() const { return mRootPose; }
+void SapienVRDisplay::setRootPose(Pose const &pose) { mRootPose = pose; }
+
+std::array<svulkan2::scene::Camera *, 2> SapienVRDisplay::getCameras() {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+void SapienVRDisplay::setCameraParameters(float near, float far) {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+void SapienVRDisplay::setScene(std::shared_ptr<Scene> scene) {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+std::vector<uint32_t> SapienVRDisplay::getControllerIds() const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+void SapienVRDisplay::fetchPoses() {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+Pose SapienVRDisplay::getHMDPose() const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+Pose SapienVRDisplay::getControllerPose(uint32_t id) const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+uint64_t SapienVRDisplay::getControllerButtonPressed(uint32_t id) const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+uint64_t SapienVRDisplay::getControllerButtonTouched(uint32_t id) const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+std::array<float, 2> SapienVRDisplay::getControllerAxisState(uint32_t id, uint32_t axis) const {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+void SapienVRDisplay::updateRender() {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+
+void SapienVRDisplay::render() {
+  throw std::runtime_error("VR is not available in the CPU-only SAPIEN build.");
+}
+#else
 SapienVRDisplay::SapienVRDisplay() {
   mEngine = SapienRenderEngine::Get();
   auto &renderConfig = SapienRendererDefault::Get();
@@ -186,6 +244,7 @@ void SapienVRDisplay::render() {
   // present to steam
   mVR->renderFrame(imageLeft, imageRight);
 }
+#endif
 
 } // namespace sapien_renderer
 } // namespace sapien

@@ -1,4 +1,5 @@
 #pragma once
+#ifdef SAPIEN_CUDA
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -18,3 +19,4 @@ struct CudaLib {
 };
 
 } // namespace sapien
+#endif

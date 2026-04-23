@@ -2,6 +2,14 @@ import pkg_resources
 from warnings import warn
 import platform
 import os
+from .version import __cpu_only__
+
+
+CPU_ONLY_VULKAN_HELP = (
+    "CPU-only SAPIEN requires a system Vulkan loader and Mesa software Vulkan ICDs. "
+    "Install packages such as libvulkan1 and mesa-vulkan-drivers "
+    "(Ubuntu/Debian) or vulkan-loader and mesa-vulkan-drivers (Fedora)."
+)
 
 
 def _ensure_libvulkan():
@@ -13,6 +21,9 @@ def _ensure_libvulkan():
         if os.path.isfile(os.path.join(path, "libvulkan.so.1")):
             return
 
+    if __cpu_only__:
+        raise RuntimeError(CPU_ONLY_VULKAN_HELP)
+
     # add our vulkan to LD_LIBRARY_PATH
     vulkan_library_path = pkg_resources.resource_filename(
         "sapien", "vulkan_library/libvulkan.so.1.3.224"
@@ -23,6 +34,9 @@ def _ensure_libvulkan():
 
 
 def _ensure_vulkan_icd():
+    if __cpu_only__:
+        return
+
     if os.system("nvidia-smi > /dev/null 2>&1") != 0:
         return
 
@@ -43,6 +57,9 @@ def _ensure_vulkan_icd():
 
 
 def _ensure_egl_icd():
+    if __cpu_only__:
+        return
+
     if os.system("nvidia-smi > /dev/null 2>&1") != 0:
         return
 

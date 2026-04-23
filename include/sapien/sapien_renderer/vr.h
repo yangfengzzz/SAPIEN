@@ -5,7 +5,12 @@
 
 #include <svulkan2/renderer/renderer.h>
 #include <svulkan2/renderer/rt_renderer.h>
-#include <svulkan2/renderer/vr.h>
+
+namespace svulkan2 {
+namespace renderer {
+class VRDisplay;
+}
+} // namespace svulkan2
 
 namespace sapien {
 namespace sapien_renderer {

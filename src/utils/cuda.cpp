@@ -1,4 +1,5 @@
 #include "sapien/utils/cuda.h"
+#ifdef SAPIEN_CUDA
 #include <cuda.h>
 
 #include "./cuda_lib.h"
@@ -78,3 +79,26 @@ int getCudaPtrDevice(void *ptr) {
 }
 
 } // namespace sapien
+#else
+
+namespace sapien {
+
+void CudaEvent::init() { throw std::runtime_error("CUDA support is not available in this SAPIEN build"); }
+CudaEvent::CudaEvent(CudaEvent &&other) = default;
+CudaEvent &CudaEvent::operator=(CudaEvent &&other) = default;
+void CudaEvent::record(cudaStream_t) {
+  throw std::runtime_error("CUDA support is not available in this SAPIEN build");
+}
+void CudaEvent::wait(cudaStream_t) const {
+  throw std::runtime_error("CUDA support is not available in this SAPIEN build");
+}
+void CudaEvent::synchronize() const {
+  throw std::runtime_error("CUDA support is not available in this SAPIEN build");
+}
+CudaEvent::~CudaEvent() = default;
+int getCudaPtrDevice(void *) {
+  throw std::runtime_error("CUDA support is not available in this SAPIEN build");
+}
+
+} // namespace sapien
+#endif

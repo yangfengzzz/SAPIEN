@@ -6,10 +6,17 @@ from zipfile import ZipFile
 import requests
 
 from ..pysapien.physx import *
-from ..pysapien.physx import _enable_gpu
+
+try:
+    from ..pysapien.physx import _enable_gpu
+except ImportError:
+    _enable_gpu = None
 
 
 def enable_gpu():
+    if _enable_gpu is None:
+        raise RuntimeError("GPU support is not available in this build.")
+
     if is_gpu_enabled():
         return
 

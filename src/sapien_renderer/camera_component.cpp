@@ -431,6 +431,7 @@ void SapienRenderCameraComponent::gpuInit() {
 }
 
 CudaArrayHandle SapienRenderCameraComponent::getCudaBuffer() {
+#ifdef SAPIEN_CUDA
   if (!mCamera) {
     throw std::runtime_error(
         "failed to access camera cuda buffer: the camera is not added to scene.");
@@ -451,6 +452,9 @@ CudaArrayHandle SapienRenderCameraComponent::getCudaBuffer() {
   } else {
     throw std::runtime_error("only rasterization renderer supports camera cuda buffer.");
   }
+#else
+  throw std::runtime_error("sapien is not compiled with CUDA support");
+#endif
 }
 
 void SapienRenderCameraComponent::setGpuBatchedPoseIndex(int index) { mGpuPoseIndex = index; }

@@ -10,21 +10,15 @@
 #include "sapien/profiler.h"
 #include <extensions/PxExtensionsAPI.h>
 
+#ifdef SAPIEN_CUDA
 #include "./physx_system.cuh"
 #include <cuda.h>
 #include <cuda_runtime.h>
+#endif
 
 using namespace physx;
 namespace sapien {
 namespace physx {
-
-struct SapienBodyDataTest {
-  Pose pose;
-  Vec3 v;
-  Vec3 w;
-};
-
-static_assert(sizeof(SapienBodyDataTest) == 52);
 
 PhysxSystem::PhysxSystem()
     : mSceneConfig(PhysxDefault::getSceneConfig()), mEngine(PhysxEngine::Get()) {}
@@ -69,6 +63,7 @@ PhysxSystemCpu::PhysxSystemCpu() {
   mPxScene->setSimulationEventCallback(&mSimulationCallback);
 }
 
+#ifdef SAPIEN_CUDA
 PhysxSystemGpu::PhysxSystemGpu(std::shared_ptr<Device> device) {
   if (!PhysxDefault::GetGPUEnabled()) {
     throw std::runtime_error(
@@ -128,6 +123,8 @@ PhysxSystemGpu::PhysxSystemGpu(std::shared_ptr<Device> device) {
   mPxScene = mEngine->getPxPhysics()->createScene(sceneDesc);
 }
 
+#endif
+
 void PhysxSystemCpu::registerComponent(std::shared_ptr<PhysxRigidDynamicComponent> component) {
   mRigidDynamicComponents.insert(component);
 }
@@ -160,6 +157,7 @@ PhysxSystemCpu::getArticulationLinkComponents() const {
   return {mArticulationLinkComponents.begin(), mArticulationLinkComponents.end()};
 }
 
+#ifdef SAPIEN_CUDA
 void PhysxSystemGpu::registerComponent(std::shared_ptr<PhysxRigidDynamicComponent> component) {
   mRigidDynamicComponents.insert(component);
   mGpuInitialized = false;
@@ -197,6 +195,7 @@ std::vector<std::shared_ptr<PhysxArticulationLinkComponent>>
 PhysxSystemGpu::getArticulationLinkComponents() const {
   return {mArticulationLinkComponents.begin(), mArticulationLinkComponents.end()};
 }
+#endif
 
 std::unique_ptr<PhysxHitInfo> PhysxSystemCpu::raycast(Vec3 const &origin, Vec3 const &direction,
                                                       float distance) {
@@ -225,6 +224,7 @@ void PhysxSystemCpu::step() {
   }
 }
 
+#ifdef SAPIEN_CUDA
 void PhysxSystemGpu::step() {
   if (!mGpuInitialized) {
     throw std::runtime_error("failed to step: gpu simulation is not initialized.");
@@ -251,6 +251,7 @@ void PhysxSystemGpu::stepStart() {
 }
 
 void PhysxSystemGpu::stepFinish() { mPxScene->fetchResults(true); }
+#endif
 
 std::string PhysxSystemCpu::packState() const {
   std::ostringstream ss;
@@ -366,6 +367,7 @@ int PhysxSystem::computeArticulationMaxLinkCount() const {
   return result;
 }
 
+#ifdef SAPIEN_CUDA
 void PhysxSystemGpu::gpuInit() {
   ++mTotalSteps;
   ensureCudaDevice();
@@ -1082,6 +1084,7 @@ void PhysxSystemGpu::allocateCudaBuffers() {
 }
 
 void PhysxSystemGpu::ensureCudaDevice() { checkCudaErrors(cudaSetDevice(mDevice->cudaId)); }
+#endif
 
 PhysxSystem::~PhysxSystem() { logger::info("Deleting PhysxSystem"); }
 
@@ -1093,6 +1096,7 @@ PhysxSystemCpu::~PhysxSystemCpu() {
     mPxCPUDispatcher->release();
   }
 }
+#ifdef SAPIEN_CUDA
 PhysxSystemGpu::~PhysxSystemGpu() {
   if (mPxScene) {
     mPxScene->release();
@@ -1101,6 +1105,7 @@ PhysxSystemGpu::~PhysxSystemGpu() {
     mPxCPUDispatcher->release();
   }
 }
+#endif
 
 } // namespace physx
 } // namespace sapien

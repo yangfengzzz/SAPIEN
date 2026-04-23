@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <string>
 
+#ifdef SAPIEN_CUDA
+
 #define checkCudaErrors(call)                                                                     \
   do {                                                                                            \
     cudaError_t err = call;                                                                       \
@@ -47,4 +49,42 @@ struct CudaEvent {
   CUevent event{nullptr};
 };
 
-}; // namespace sapien
+} // namespace sapien
+
+#else
+
+#define checkCudaErrors(call)                                                                     \
+  do {                                                                                            \
+    throw std::runtime_error("CUDA support is not available in this SAPIEN build");               \
+  } while (0)
+
+#define checkCudaDriverErrors(call)                                                               \
+  do {                                                                                            \
+    throw std::runtime_error("CUDA support is not available in this SAPIEN build");               \
+  } while (0)
+
+using cudaStream_t = void *;
+using CUevent = void *;
+
+namespace sapien {
+
+int getCudaPtrDevice(void *ptr);
+
+struct CudaEvent {
+  CudaEvent() {}
+  void init();
+  CudaEvent(CudaEvent const &) = delete;
+  CudaEvent &operator=(CudaEvent const &) = delete;
+  CudaEvent(CudaEvent &&other);
+  CudaEvent &operator=(CudaEvent &&other);
+  void record(cudaStream_t stream);
+  void wait(cudaStream_t stream) const;
+  void synchronize() const;
+  ~CudaEvent();
+  int cudaId{-1};
+  CUevent event{nullptr};
+};
+
+} // namespace sapien
+
+#endif
