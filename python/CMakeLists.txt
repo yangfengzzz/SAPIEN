@@ -36,6 +36,13 @@ pybind11_add_module(pysapien ${PYBIND_SRC})
 target_link_libraries(pysapien PRIVATE sapien::sapien eigen)
 target_compile_definitions(pysapien PRIVATE PYBIND11_USE_SMART_HOLDER_AS_DEFAULT)
 
+if(UNIX AND NOT APPLE)
+    set_target_properties(pysapien PROPERTIES
+        BUILD_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
+        INSTALL_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
+    )
+endif()
+
 if (MSVC)
     set_target_properties(pysapien PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
     set_target_properties(pysapien PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})

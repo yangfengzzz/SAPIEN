@@ -1,0 +1,293 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c7431fe..8e33ec2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -6,6 +6,7 @@ option(SVULKAN2_SHARED "Force svulkan2 to be shared" ON)
+ option(SVULKAN2_PROFILE "Build with profiler" OFF)
+ option(SVULKAN2_BUILD_TEST "Build with unit test" OFF)
+ option(SVULKAN2_CUDA_INTEROP "Allow CUDA to use Vulkan buffer" ON)
++option(SVULKAN2_USE_OPENVR "Build OpenVR support" ON)
+ 
+ if(MSVC)
+     add_compile_options("/W4" "$<$<CONFIG:Release>:/O2>")
+@@ -30,9 +31,14 @@ include(glslang)
+ include(spirv-cross)
+ include(imgui)
+ include(openexr)
+-include(openvr)
++if(SVULKAN2_USE_OPENVR)
++    include(openvr)
++endif()
+ 
+ file(GLOB_RECURSE SVULKAN2_SRC "src/*.cpp")
++if(NOT SVULKAN2_USE_OPENVR)
++    list(FILTER SVULKAN2_SRC EXCLUDE REGEX "src/renderer/vr\\.cpp$")
++endif()
+ 
+ if(SVULKAN2_SHARED)
+     add_library(svulkan2 SHARED ${SVULKAN2_SRC})
+@@ -41,9 +47,18 @@ else()
+ endif()
+ 
+ set_target_properties(svulkan2 PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
++if(UNIX AND NOT APPLE)
++    set_target_properties(svulkan2 PROPERTIES
++        BUILD_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
++        INSTALL_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
++    )
++endif()
+ 
+ target_compile_definitions(imgui PRIVATE VK_NO_PROTOTYPES)
+ target_compile_definitions(svulkan2 PUBLIC VK_NO_PROTOTYPES)
++if(SVULKAN2_USE_OPENVR)
++    target_compile_definitions(svulkan2 PUBLIC SVULKAN2_USE_OPENVR)
++endif()
+ 
+ target_include_directories(svulkan2 PUBLIC
+     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+@@ -58,10 +73,12 @@ target_link_libraries(svulkan2 PUBLIC Vulkan::Headers glm)
+ 
+ find_package(Threads REQUIRED)
+ target_link_libraries(svulkan2 PRIVATE assimp::assimp glslang SPIRV spirv-cross-cpp glfw spdlog::spdlog ktx imgui ${CMAKE_DL_LIBS} Threads::Threads OpenEXR)
+-if (MSVC)
+-    target_link_libraries(svulkan2 PRIVATE openvr_api64)
+-else()
+-    target_link_libraries(svulkan2 PRIVATE openvr_api)
++if(SVULKAN2_USE_OPENVR)
++    if (MSVC)
++        target_link_libraries(svulkan2 PRIVATE openvr_api64)
++    else()
++        target_link_libraries(svulkan2 PRIVATE openvr_api)
++    endif()
+ endif()
+ 
+ if (${SVULKAN2_PROFILE})
+@@ -121,10 +138,12 @@ if (UNIX)
+     target_link_libraries(svulkan2_main stdc++fs)
+ endif()
+ 
+-add_executable(svulkan2_vr app/vr.cpp)
+-target_link_libraries(svulkan2_vr svulkan2 glfw imgui)
+-if (UNIX)
+-    target_link_libraries(svulkan2_vr stdc++fs)
++if(SVULKAN2_USE_OPENVR)
++    add_executable(svulkan2_vr app/vr.cpp)
++    target_link_libraries(svulkan2_vr svulkan2 glfw imgui)
++    if (UNIX)
++        target_link_libraries(svulkan2_vr stdc++fs)
++    endif()
+ endif()
+ 
+ add_executable(gencube app/gencube.cpp)
+diff --git a/include/svulkan2/core/instance.h b/include/svulkan2/core/instance.h
+index e7d4f9b..04d23f5 100644
+--- a/include/svulkan2/core/instance.h
++++ b/include/svulkan2/core/instance.h
+@@ -21,6 +21,10 @@ struct PhysicalDeviceInfo {
+   uint32_t subgroupSize{0};
+ 
+   struct Features {
++    bool independentBlend{false};
++    bool descriptorBindingPartiallyBound{false};
++    bool timelineSemaphore{false};
++    bool extendedDynamicState{false};
+     bool wideLines{false};
+     bool geometryShader{false};
+   } features;
+diff --git a/src/core/device.cpp b/src/core/device.cpp
+index 0e64d42..ecaf5e1 100644
+--- a/src/core/device.cpp
++++ b/src/core/device.cpp
+@@ -4,11 +4,14 @@
+ #include "svulkan2/core/instance.h"
+ #include "svulkan2/core/physical_device.h"
+ #include "svulkan2/core/queue.h"
++#ifdef SVULKAN2_USE_OPENVR
+ #include <openvr.h>
++#endif
+ 
+ namespace svulkan2 {
+ namespace core {
+ 
++#ifdef SVULKAN2_USE_OPENVR
+ // https://github.com/ValveSoftware/openvr/blob/f51d87ecf8f7903e859b0aa4d617ff1e5f33db5a/samples/hellovr_vulkan/hellovr_vulkan_main.cpp#L719
+ static bool GetVRDeviceExtensionsRequired(VkPhysicalDevice pPhysicalDevice,
+                                           std::vector<std::string> &outDeviceExtensionList) {
+@@ -47,6 +50,7 @@ static bool GetVRDeviceExtensionsRequired(VkPhysicalDevice pPhysicalDevice,
+ 
+   return true;
+ }
++#endif
+ 
+ Device::Device(std::shared_ptr<PhysicalDevice> physicalDevice) : mPhysicalDevice(physicalDevice) {
+   if (!physicalDevice) {
+@@ -61,21 +65,23 @@ Device::Device(std::shared_ptr<PhysicalDevice> physicalDevice) : mPhysicalDevice
+   vk::PhysicalDeviceFeatures2 features{};
+   vk::PhysicalDeviceDescriptorIndexingFeatures descriptorFeatures{};
+   vk::PhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures{};
++  vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
+ 
+   features.setPNext(&descriptorFeatures);
+   descriptorFeatures.setPNext(&timelineSemaphoreFeatures);
++  timelineSemaphoreFeatures.setPNext(&extendedDynamicStateFeatures);
+ 
+-  features.features.setIndependentBlend(true);
++  features.features.setIndependentBlend(
++      physicalDevice->getPickedDeviceInfo().features.independentBlend);
+   features.features.setWideLines(physicalDevice->getPickedDeviceInfo().features.wideLines);
+   features.features.setGeometryShader(
+       physicalDevice->getPickedDeviceInfo().features.geometryShader);
+-  descriptorFeatures.setDescriptorBindingPartiallyBound(true);
+-  timelineSemaphoreFeatures.setTimelineSemaphore(true);
+-  descriptorFeatures.setPNext(&timelineSemaphoreFeatures);
+-
+-  vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeature;
+-  extendedDynamicStateFeature.setExtendedDynamicState(true);
+-  timelineSemaphoreFeatures.setPNext(&extendedDynamicStateFeature);
++  descriptorFeatures.setDescriptorBindingPartiallyBound(
++      physicalDevice->getPickedDeviceInfo().features.descriptorBindingPartiallyBound);
++  timelineSemaphoreFeatures.setTimelineSemaphore(
++      physicalDevice->getPickedDeviceInfo().features.timelineSemaphore);
++  extendedDynamicStateFeatures.setExtendedDynamicState(
++      physicalDevice->getPickedDeviceInfo().features.extendedDynamicState);
+ 
+   vk::PhysicalDeviceAccelerationStructureFeaturesKHR asFeature;
+   asFeature.setAccelerationStructure(true);
+@@ -100,14 +106,16 @@ Device::Device(std::shared_ptr<PhysicalDevice> physicalDevice) : mPhysicalDevice
+     descriptorFeatures.setRuntimeDescriptorArray(true);
+     descriptorFeatures.setShaderStorageBufferArrayNonUniformIndexing(true);
+     descriptorFeatures.setShaderSampledImageArrayNonUniformIndexing(true);
+-    extendedDynamicStateFeature.setPNext(&asFeature);
++    timelineSemaphoreFeatures.setPNext(&asFeature);
+     asFeature.setPNext(&rtFeature);
+     rtFeature.setPNext(&addrFeature);
+     addrFeature.setPNext(&clockFeature);
+     features.features.setShaderInt64(true);
+   }
+ 
+-  deviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
++  if (mPhysicalDevice->getPickedDeviceInfo().features.extendedDynamicState) {
++    deviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
++  }
+ 
+ #ifdef SVULKAN2_CUDA_INTEROP
+   deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+@@ -121,6 +129,7 @@ Device::Device(std::shared_ptr<PhysicalDevice> physicalDevice) : mPhysicalDevice
+   // try to enable VR
+   bool vrEnabled{false};
+   std::vector<std::string> vrExtensions;
++#ifdef SVULKAN2_USE_OPENVR
+   if (GetVRDeviceExtensionsRequired(mPhysicalDevice->getInternal(), vrExtensions)) {
+     for (auto const &e : vrExtensions) {
+       deviceExtensions.push_back(e.c_str());
+@@ -128,6 +137,7 @@ Device::Device(std::shared_ptr<PhysicalDevice> physicalDevice) : mPhysicalDevice
+     vrEnabled = true;
+     logger::info("VR enabled");
+   }
++#endif
+ 
+   if ((mPhysicalDevice->getPickedDeviceInfo().present &&
+        mPhysicalDevice->getInstance()->isGLFWEnabled()) ||
+diff --git a/src/core/instance.cpp b/src/core/instance.cpp
+index e50e8b2..aaeac3b 100644
+--- a/src/core/instance.cpp
++++ b/src/core/instance.cpp
+@@ -4,7 +4,9 @@
+ #include "svulkan2/core/physical_device.h"
+ #include <GLFW/glfw3.h>
+ #include <filesystem>
++#ifdef SVULKAN2_USE_OPENVR
+ #include <openvr.h>
++#endif
+ 
+ namespace svulkan2 {
+ namespace core {
+@@ -41,6 +43,7 @@ std::shared_ptr<Instance> Instance::Get(uint32_t appVersion, uint32_t engineVers
+   return nullptr;
+ }
+ 
++#ifdef SVULKAN2_USE_OPENVR
+ // https://github.com/ValveSoftware/openvr/blob/f51d87ecf8f7903e859b0aa4d617ff1e5f33db5a/samples/hellovr_vulkan/hellovr_vulkan_main.cpp#L673
+ static bool GetVRInstanceExtensionsRequired(std::vector<std::string> &outInstanceExtensionList) {
+   if (!vr::VRCompositor()) {
+@@ -76,6 +79,7 @@ static bool GetVRInstanceExtensionsRequired(std::vector<std::string> &outInstanc
+ 
+   return true;
+ }
++#endif
+ 
+ Instance::Instance(uint32_t appVersion, uint32_t engineVersion, uint32_t apiVersion)
+     : mApiVersion(apiVersion) {
+@@ -191,6 +195,7 @@ Instance::Instance(uint32_t appVersion, uint32_t engineVersion, uint32_t apiVers
+   }
+ 
+   // vr
++#ifdef SVULKAN2_USE_OPENVR
+   if (vr::VR_IsHmdPresent()) {
+     vr::EVRInitError err = vr::VRInitError_None;
+     vr::VR_Init(&err, vr::VRApplication_Scene);
+@@ -213,6 +218,7 @@ Instance::Instance(uint32_t appVersion, uint32_t engineVersion, uint32_t apiVers
+       }
+     }
+   }
++#endif
+ 
+ #ifdef VK_VALIDATION
+   extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+@@ -288,8 +294,10 @@ std::vector<PhysicalDeviceInfo> Instance::summarizePhysicalDevices() const {
+   vk::PhysicalDeviceFeatures2 features{};
+   vk::PhysicalDeviceDescriptorIndexingFeatures descriptorFeatures{};
+   vk::PhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures{};
++  vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
+   features.setPNext(&descriptorFeatures);
+   descriptorFeatures.setPNext(&timelineSemaphoreFeatures);
++  timelineSemaphoreFeatures.setPNext(&extendedDynamicStateFeatures);
+ 
+   int ord = 0;
+   for (auto device : mInstance->enumeratePhysicalDevices()) {
+@@ -328,12 +336,12 @@ std::vector<PhysicalDeviceInfo> Instance::summarizePhysicalDevices() const {
+     // check features
+     device.getFeatures2(&features);
+     if (features.features.independentBlend && descriptorFeatures.descriptorBindingPartiallyBound &&
+-        timelineSemaphoreFeatures.timelineSemaphore) {
++        timelineSemaphoreFeatures.timelineSemaphore &&
++        extendedDynamicStateFeatures.extendedDynamicState) {
+       required_features = true;
+     }
+ 
+-    std::vector<const char *> all_required_extensions = {
+-        VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME};
++    std::vector<const char *> all_required_extensions = {};
+     size_t required_extension_count = 0;
+ 
+     // check extensions
+@@ -406,7 +414,15 @@ std::vector<PhysicalDeviceInfo> Instance::summarizePhysicalDevices() const {
+                            .cudaComputeMode = computeMode,
+                            .deviceType = deviceType,
+                            .subgroupSize = subgroupSize,
+-                           .features{.wideLines = (bool)features.features.wideLines,
++                           .features{.independentBlend =
++                                         (bool)features.features.independentBlend,
++                                     .descriptorBindingPartiallyBound =
++                                         (bool)descriptorFeatures.descriptorBindingPartiallyBound,
++                                     .timelineSemaphore =
++                                         (bool)timelineSemaphoreFeatures.timelineSemaphore,
++                                     .extendedDynamicState =
++                                         (bool)extendedDynamicStateFeatures.extendedDynamicState,
++                                     .wideLines = (bool)features.features.wideLines,
+                                      .geometryShader = (bool)features.features.geometryShader}});
+   }
+   logger::info(ss.str());
+@@ -553,10 +569,12 @@ std::shared_ptr<PhysicalDevice> Instance::createPhysicalDevice(std::string const
+ }
+ 
+ void Instance::shutdownVR() const {
++#ifdef SVULKAN2_USE_OPENVR
+   if (mVRSupported) {
+     logger::info("VR shutting down");
+     vr::VR_Shutdown();
+   }
++#endif
+ }
+ 
+ Instance::~Instance() { glfwTerminate(); }

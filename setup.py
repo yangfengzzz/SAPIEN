@@ -6,6 +6,7 @@ import subprocess
 import time
 import shutil
 import argparse
+import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build import build
@@ -105,6 +106,43 @@ def generate_version():
         version = git_tag
 
     return version
+
+
+def apply_git_patch(repo_dir, patch_path):
+    def run_git_apply(*extra_args):
+        return subprocess.run(
+            ["git", "apply", *extra_args, patch_path],
+            cwd=repo_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    check = run_git_apply("--check")
+    if check.returncode == 0:
+        subprocess.check_call(["git", "apply", patch_path], cwd=repo_dir)
+        return
+
+    reverse_check = run_git_apply("--reverse", "--check")
+    if reverse_check.returncode == 0:
+        print(f"patch already applied: {os.path.basename(patch_path)}")
+        return
+
+    raise RuntimeError(
+        "failed to apply patch {}\nstdout:\n{}\nstderr:\n{}".format(
+            patch_path, check.stdout, check.stderr
+        )
+    )
+
+
+def apply_local_patches(source_dir):
+    patch_root = os.path.join(source_dir, "patches", "sapien-vulkan-2")
+    if not os.path.isdir(patch_root):
+        return
+
+    repo_dir = os.path.join(source_dir, "3rd_party", "sapien-vulkan-2")
+    for patch_path in sorted(glob.glob(os.path.join(patch_root, "*.patch"))):
+        apply_git_patch(repo_dir, os.path.abspath(patch_path))
 
 
 version = generate_version()
@@ -279,6 +317,15 @@ class CMakeBuild(build_ext):
                 if f.endswith("dll"):
                     shutil.copy(os.path.join(bindir, f), extdir)
 
+        if platform.system() == "Linux":
+            for folder in ["lib", "lib64"]:
+                library_dir = os.path.join(sapien_install_dir, folder)
+                if not os.path.exists(library_dir):
+                    continue
+                for lib in os.listdir(library_dir):
+                    if lib in ["libsapien.so", "libsvulkan2.so"]:
+                        shutil.copy(os.path.join(library_dir, lib), extdir)
+
         oidn_library_path = os.path.join(extdir, "oidn_library")
         if os.path.exists(oidn_library_path):
             shutil.rmtree(oidn_library_path)
@@ -353,6 +400,7 @@ def read_requirements():
 project_python_home_dir = os.path.join("python", "py_package")
 package_data = {
     "sapien": [
+        "*.so",
         "__init__.pyi",
         "pysapien/__init__.pyi",
         "pysapien/simsense.pyi",
@@ -360,6 +408,7 @@ package_data = {
         "pysapien/render.pyi",
         "pysapien/math.pyi",
         "pysapien/internal_renderer.pyi",
+        "oidn_library/*.so*",
     ],
 }
 
@@ -367,6 +416,7 @@ package_data = {
 if not args.pybind_only:
     # build SAPIEN
     source_dir = os.path.abspath(os.path.dirname(__file__))
+    apply_local_patches(source_dir)
     build_sapien(source_dir, os.path.join(source_dir, args.build_dir))
 
 if args.sapien_only:

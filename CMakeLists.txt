@@ -135,6 +135,12 @@ target_include_directories(sapien PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set_target_properties(sapien PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 set_target_properties(sapien PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
+if(UNIX AND NOT APPLE)
+    set_target_properties(sapien PROPERTIES
+        BUILD_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
+        INSTALL_RPATH "\$ORIGIN:\$ORIGIN/oidn_library"
+    )
+endif()
 
 if (${SAPIEN_PROFILE})
     target_compile_definitions(sapien PUBLIC SAPIEN_PROFILE)
